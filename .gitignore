@@ -8,3 +8,4 @@ calibrations/*.json
 stm32/new-stm-code_SERIAL_MYO_MVP_2026-07-07/
 stm32/**/Debug/
 stm32/**/Release/
+evidence/raw/

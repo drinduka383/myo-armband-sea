@@ -2,9 +2,11 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from myo_scan import MYO_CONTROL_SERVICE, is_myo
 from run_myo_sea_demo import IntentDetector, MYO_STREAM_COMMAND
+from sea_model import SEAModel
 
 
 def detector():
@@ -55,6 +57,27 @@ class FakeStream:
 
 
 class IntentDetectorTest(unittest.TestCase):
+    def test_virtual_sea_is_bounded_and_pinches_toward_zero(self):
+        model = SEAModel("assistive")
+        model.update(0, 0.0)
+        pinched = model.update(1, 1.0)
+        self.assertEqual(pinched["target_theta_deg"], 0)
+        self.assertGreaterEqual(pinched["theta_deg"], 0)
+        self.assertLess(pinched["theta_deg"], 180)
+        self.assertGreater(pinched["force_N"], 0)
+    def test_loaded_preset_parameter_editor(self):
+        value = detector()
+        with patch("builtins.input", side_effect=["0.85", "", "", "", "", "", ""]):
+            self.assertTrue(value.edit_loaded_parameters())
+        self.assertEqual(value.on_similarity, 0.85)
+        self.assertTrue(value.preset_modified)
+
+    def test_loaded_preset_can_request_retake(self):
+        value = detector()
+        with patch("builtins.input", return_value="r"):
+            value.choose_loaded_action()
+        self.assertTrue(value.retake_requested)
+
     def test_myo_stream_mode_enables_imu(self):
         self.assertEqual(MYO_STREAM_COMMAND, bytes((0x01, 0x03, 0x02, 0x01, 0x00)))
 

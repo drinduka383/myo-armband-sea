@@ -8,6 +8,8 @@ import tempfile
 from collections import deque
 from pathlib import Path
 
+from sea_model import SEAModel
+
 os.environ.setdefault("MPLCONFIGDIR", tempfile.gettempdir())
 
 STATE_COLOR = {"REST": "#9ca3af", "GESTURE_REJECT": "#f59e0b", "MOTION_REJECT": "#ef4444", "TARGET": "#22c55e"}
@@ -124,8 +126,13 @@ def plot_csv(csv_file, output=None):
         raise SystemExit(f"CSV is missing fields: {', '.join(sorted(missing))}")
     t0 = float(rows[0]["timestamp"])
     t = [float(row["timestamp"]) - t0 for row in rows]
+    model = SEAModel("assistive")
+    simulation = [
+        model.update(float(row.get("emg_effort") or 0) if row["state"] == "TARGET" else 0, float(row["timestamp"]))
+        for row in rows
+    ]
     colors = plt.cm.tab10.colors[:8]
-    figure, axes = plt.subplots(4, 1, sharex=True, figsize=(12, 9))
+    figure, axes = plt.subplots(5, 1, sharex=True, figsize=(12, 11))
     for index in range(8):
         axes[0].plot(t, [float(row[f"mav_{index + 1}"]) for row in rows], color=colors[index], label=f"CH{index + 1}")
     axes[0].set_ylabel("MAV")
@@ -134,16 +141,21 @@ def plot_csv(csv_file, output=None):
     axes[1].plot(t, [float(row["best_rejection_similarity"]) for row in rows], label="Best rejection")
     axes[1].set_ylabel("Cosine similarity")
     axes[1].legend()
-    axes[2].scatter(t, [0] * len(t), c=[STATE_COLOR.get(row["state"], "#9ca3af") for row in rows], marker="s", s=18)
-    axes[2].set_yticks([])
-    axes[2].set_ylim(-0.5, 0.5)
-    axes[2].set_ylabel("Detector state")
-    axes[2].legend(handles=[Patch(color=color, label=state.replace("_", " ")) for state, color in STATE_COLOR.items()], ncol=4)
-    axes[3].plot(t, [float(row["force_N"]) for row in rows], label="Virtual force (N)")
-    axes[3].plot(t, [float(row["theta_deg"]) for row in rows], label="Virtual angle (deg)")
-    axes[3].set_ylabel("SEA model")
-    axes[3].set_xlabel("Time (s)")
+    axes[2].plot(t, [result["target_theta_deg"] for result in simulation], "--", label="Simulated target")
+    axes[2].plot(t, [result["theta_deg"] for result in simulation], label="Simulated finger")
+    axes[2].set_ylabel("SIMULATED\nangle (deg)")
+    axes[2].set_ylim(-5, 185)
+    axes[2].legend()
+    axes[3].plot(t, [result["x_spring_mm"] for result in simulation], label="Simulated spring deflection (mm)")
+    axes[3].plot(t, [result["force_N"] for result in simulation], label="Simulated spring force (N)")
+    axes[3].set_ylabel("SIMULATED\nSEA response")
     axes[3].legend()
+    axes[4].scatter(t, [0] * len(t), c=[STATE_COLOR.get(row["state"], "#9ca3af") for row in rows], marker="s", s=18)
+    axes[4].set_yticks([])
+    axes[4].set_ylim(-0.5, 0.5)
+    axes[4].set_ylabel("Measured EMG\ndetector state")
+    axes[4].set_xlabel("Time (s)")
+    axes[4].legend(handles=[Patch(color=color, label=state.replace("_", " ")) for state, color in STATE_COLOR.items()], ncol=4)
     for axis in axes:
         axis.grid(True, alpha=0.25)
     figure.tight_layout()

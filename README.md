@@ -3,8 +3,10 @@
 This demo uses Myo muscle activity to control a real embedded actuator chain
 and the same signal to drive a virtual 1-DOF series-elastic finger model.
 
-Real chain: Myo BLE -> Fedora/Python -> ST-LINK USB serial -> NUCLEO-F446RE ->
-Maxon ESCON 50/5 -> Harmonic Drive PMA actuator.
+Intended chain: Myo BLE -> Fedora/Python -> ST-LINK USB serial ->
+NUCLEO-F446RE -> Maxon ESCON 50/5 -> Harmonic Drive PMA actuator. The Myo
+classifier and physical STM32/ESCON actuator chain were validated separately;
+a powered end-to-end Myo-to-motor test has not been performed.
 
 Virtual chain: activation -> spool displacement -> spring compression -> tendon
 force -> finger angle. The physical actuator-control chain is validated; the
@@ -102,6 +104,11 @@ pyserial.
    Enter at the save prompt writes a processed preset under `calibrations/`.
    On later runs, choose that preset from the startup menu only if the wearer,
    arm, and Myo placement are unchanged.
+   After selecting a saved preset, choose to use it unchanged, edit activation
+   and deactivation similarity/margins/gyro/hold times, or reconnect and retake
+   a specific target, rest, open-hand, or full-fist orientation. A retake
+   replaces that three-attempt block only. On shutdown, changes can be saved as
+   a new timestamped preset, overwrite the loaded preset, or be discarded.
 
    The live `force_N` number is the virtual SEA model output, not a direct force
    sensor measurement. With `--motor disable`, it is only an internal model
@@ -119,8 +126,13 @@ pyserial.
 6. Generate the report figure:
 
    ```bash
-   python plot_log.py logs/session_YYYYMMDD_HHMMSS.csv
+   MPLBACKEND=Agg python plot_log.py logs/session_YYYYMMDD_HHMMSS.csv \
+     --output report/figures/myo-sea-replay.png
    ```
+
+   The replay recomputes an explicitly simulated bounded 0--180 degree finger
+   trajectory and virtual spring response from the measured EMG detector state.
+   Build the report with `cd report && tectonic main.tex`.
 
 If direct BLE cannot be made reliable after a documented attempt, retain the
 same serial/simulation demo with `--source keyboard` (type `1`, `0`, or `q`) or
@@ -134,7 +146,7 @@ control.
 - ESCON configuration screenshot and unloaded actuator video
 - Myo REST/ACTIVE/REST terminal screenshot with motor disabled
 - Diagnostic and assistive virtual-model screenshots
-- Final Myo-to-motor video
+- Final Myo-to-motor video (not completed; do not imply otherwise)
 - CSV session logs and generated PNG plots
 
 Known limitation: the physical SEA/tendon/finger mechanism is not complete, so

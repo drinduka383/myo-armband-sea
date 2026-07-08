@@ -285,6 +285,8 @@ class IntentDetector:
         self.pending_off_since = None
         self.newly_calibrated = False
         self.loaded_preset = None
+        self.preset_modified = False
+        self.retake_requested = False
         self.weak_calibration = False
 
     async def calibrate(self, stream, seconds, settle_s, transition_s):
@@ -575,9 +577,13 @@ class IntentDetector:
             "static_activity": self.static_activity,
             "motion_templates": self.motion_templates,
             "gyro_threshold": self.gyro_threshold,
+            "on_similarity": self.on_similarity,
+            "off_similarity": self.off_similarity,
             "weak_calibration": self.weak_calibration,
             "on_margin": self.on_margin,
             "off_margin": self.off_margin,
+            "on_hold_s": self.on_hold_s,
+            "off_hold_s": self.off_hold_s,
             "rankings": self.rankings,
         }
 
@@ -631,11 +637,120 @@ class IntentDetector:
         self.static_activity = data["static_activity"]
         self.motion_templates = data["motion_templates"]
         self.gyro_threshold = self.gyro_override or float(data["gyro_threshold"])
+        self.on_similarity = float(data.get("on_similarity", self.on_similarity))
+        self.off_similarity = float(data.get("off_similarity", self.off_similarity))
         self.weak_calibration = bool(data.get("weak_calibration", False))
         self.on_margin = float(data.get("on_margin", self.on_margin))
         self.off_margin = float(data.get("off_margin", self.off_margin))
+        self.on_hold_s = float(data.get("on_hold_s", self.on_hold_s))
+        self.off_hold_s = float(data.get("off_hold_s", self.off_hold_s))
+        if not (
+            0.0 <= self.off_similarity <= self.on_similarity <= 1.0
+            and -1.0 <= self.off_margin <= self.on_margin <= 1.0
+            and 0.0 <= self.on_hold_s <= 2.0
+            and 0.0 <= self.off_hold_s <= 2.0
+        ):
+            raise ValueError("calibration preset contains invalid detector parameters")
         self.rankings = data.get("rankings", [])
         self.loaded_preset = str(path)
+
+    def edit_loaded_parameters(self):
+        print(
+            f"Loaded target={self.chosen_target}: ON similarity={self.on_similarity:.2f}, "
+            f"OFF similarity={self.off_similarity:.2f}, ON margin={self.on_margin:.2f}, "
+            f"OFF margin={self.off_margin:.2f}, gyro={self.gyro_threshold:.1f}, "
+            f"ON hold={self.on_hold_s * 1000:.0f} ms, OFF hold={self.off_hold_s * 1000:.0f} ms"
+        )
+        def ask(label, current, minimum, maximum):
+            while True:
+                answer = input(f"{label} [{current:g}]: ").strip()
+                if not answer:
+                    return current
+                try:
+                    value = float(answer)
+                    if minimum <= value <= maximum:
+                        return value
+                except ValueError:
+                    pass
+                print(f"Enter a number from {minimum:g} to {maximum:g}.")
+
+        before = (
+            self.on_similarity, self.off_similarity, self.on_margin, self.off_margin,
+            self.gyro_threshold, self.on_hold_s, self.off_hold_s,
+        )
+        self.on_similarity = ask("Activation similarity (0..1)", self.on_similarity, 0.0, 1.0)
+        self.off_similarity = ask("Deactivation similarity", self.off_similarity, 0.0, self.on_similarity)
+        self.on_margin = ask("Activation score margin (-1..1)", self.on_margin, -1.0, 1.0)
+        self.off_margin = ask("Deactivation score margin", self.off_margin, -1.0, self.on_margin)
+        self.gyro_threshold = ask("Gyro rejection threshold", self.gyro_threshold, 1.0, 100000.0)
+        self.on_hold_s = ask("Activation hold (ms)", self.on_hold_s * 1000, 0.0, 2000.0) / 1000.0
+        self.off_hold_s = ask("Deactivation hold (ms)", self.off_hold_s * 1000, 0.0, 2000.0) / 1000.0
+        after = (
+            self.on_similarity, self.off_similarity, self.on_margin, self.off_margin,
+            self.gyro_threshold, self.on_hold_s, self.off_hold_s,
+        )
+        self.preset_modified = before != after
+        return self.preset_modified
+
+    def choose_loaded_action(self):
+        while True:
+            answer = input("Loaded preset: Enter=use unchanged, p=edit parameters, r=retake calibration: ").strip().lower()
+            if not answer:
+                return
+            if answer == "p":
+                self.edit_loaded_parameters()
+                return
+            if answer == "r":
+                self.retake_requested = True
+                return
+            print("Enter p, r, or press Enter.")
+
+    async def retake_loaded_calibration(self, stream, seconds, settle_s, transition_s):
+        labels = {
+            "t": self.chosen_target,
+            "r": "rest",
+            "o": "open_hand",
+            "f": "full_fist",
+        }
+        orientations = {"h": "handshake", "d": "palm_down", "u": "palm_up"}
+        while True:
+            while True:
+                choice = (await asyncio.to_thread(
+                    input,
+                    f"Retake: t={self.chosen_target}, r=rest, o=open hand, f=full fist: ",
+                )).strip().lower()
+                if choice in labels:
+                    break
+                print("Enter t, r, o, or f.")
+            while True:
+                orientation_choice = (await asyncio.to_thread(
+                    input,
+                    "Orientation: h=handshake, d=palm-down, u=palm-up: ",
+                )).strip().lower()
+                if orientation_choice in orientations:
+                    break
+                print("Enter h, d, or u.")
+            label = labels[choice]
+            orientation = orientations[orientation_choice]
+            trials = await collect_trials(
+                stream, label, orientation, self.repetitions, seconds, settle_s, transition_s,
+                self.window_s, self.step_s,
+            )
+            if label == "rest":
+                totals = [sum(window) for trial in trials for window in trial["windows"]]
+                self.rest_thresholds[orientation] = statistics.fmean(totals) + 3.0 * statistics.pstdev(totals)
+                self.orientation_quaternions[orientation] = mean_quaternion([trial["quaternion"] for trial in trials])
+            elif label == self.chosen_target:
+                self.target_templates[orientation] = self._template(trials)
+                self.target_activity[orientation] = self._activity_stats(trials)
+            else:
+                self.static_templates[label][orientation] = self._template(trials)
+                self.static_activity[label][orientation] = self._activity_stats(trials)
+            self.preset_modified = True
+            print(f"Replaced {label} / {orientation} in the loaded preset.")
+            another = (await asyncio.to_thread(input, "Retake another calibration block? [y/N]: ")).strip().lower()
+            if another not in {"y", "yes"}:
+                return
 
     def save_preset(self, path):
         path = Path(path)
@@ -939,6 +1054,7 @@ async def run(args):
     if template_like and args.calibration_preset:
         detector.load_preset(args.calibration_preset)
         print(f"Loaded calibration: {args.calibration_preset} ({detector.chosen_target})")
+        detector.choose_loaded_action()
     if args.detector == "threshold" and args.source != "myo" and args.threshold == "auto":
         detector.high, detector.low = 63.5, 44.45
     model = SEAModel(args.mode)
@@ -1011,6 +1127,14 @@ async def run(args):
                 if time.monotonic() - imu_ready_at > 3.0:
                     raise TimeoutError("Myo connected but no IMU samples arrived; calibration did not start")
                 await asyncio.sleep(0.1)
+
+        if template_like and detector.retake_requested:
+            await detector.retake_loaded_calibration(
+                stream,
+                args.calibration_seconds,
+                args.calibration_settle_seconds,
+                args.calibration_transition_seconds,
+            )
 
         if template_like and not detector.loaded_preset:
             await detector.calibrate(
@@ -1147,6 +1271,17 @@ async def run(args):
         answer = (await asyncio.to_thread(input, "Save this validated calibration preset? [Y/n]: ")).strip().lower()
         if answer in {"", "y", "yes"}:
             path = Path(f"calibrations/calibration_{datetime.now():%Y%m%d_%H%M%S}.json")
+            detector.save_preset(path)
+            print(f"Calibration saved: {path}")
+    elif graceful and template_like and detector.preset_modified:
+        choice = (await asyncio.to_thread(
+            input,
+            "Save parameter changes: Enter=new preset, o=overwrite loaded preset, d=discard: ",
+        )).strip().lower()
+        if choice != "d":
+            path = Path(detector.loaded_preset) if choice == "o" else Path(
+                f"calibrations/calibration_{datetime.now():%Y%m%d_%H%M%S}.json"
+            )
             detector.save_preset(path)
             print(f"Calibration saved: {path}")
 
