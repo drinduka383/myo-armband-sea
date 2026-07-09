@@ -118,7 +118,7 @@ The final result came from a staged commissioning process rather than a single e
   \item \textbf{4--5 July 2026 -- scope recovery.} The plan was reduced to a minimum viable actuator chain: preserve the potentiometer demo, verify STM32 outputs with a multimeter, connect to ESCON only after verification, and keep a fallback demonstration.
   \item \textbf{6 July 2026 -- embedded MVP achieved.} A working CubeIDE project named \texttt{new-stm-code} was created. PA4/A2 and PC0/A5 were verified independently with a multimeter, then wired to ESCON Analog Input 1 and Digital Input 2. Pressing the Nucleo button produced about 1.00 V analog command and 3.31 V enable; ESCON demand and actual speed rose near 100 rpm; the PMA actuator rotated repeatably.
   \item \textbf{7--8 July 2026 -- Myo and serial diagnostics.} Laptop serial control, Myo armband acquisition, calibration, template matching, gesture rejection, gyro-based motion rejection, live plotting, CSV logging, and virtual SEA replay were added. Myo diagnostic control worked with the motor disabled.
-  \item \textbf{9 July 2026 -- finalization.} The repository, report, evidence notes, replay plots, and software checks were finalized. The deliverable was frozen as a physical actuator/embedded-control MVP plus diagnostic Myo subsystem and simulated SEA replay.
+  \item \textbf{9 July 2026 -- finalization.} The final report, selected evidence figures, replay plots, source code, calibration files, and software checks were finalized. The deliverable was frozen as a physical actuator/embedded-control MVP plus diagnostic Myo subsystem and simulated SEA replay.
 \end{itemize}
 
 \section{Failure and recovery points}
@@ -133,15 +133,21 @@ Several useful engineering corrections occurred during the process:
   \item Myo control was kept motor-disabled because the physical SEA output stage did not yet include travel limits, spring deflection sensing, or a finger mechanism. This was a safety decision, not a software limitation.
 \end{itemize}
 
-\section{Evidence handling}
+\section{Submission evidence package}
 
-The evidence set contains wiring photographs, multimeter photographs, ESCON Studio screenshots, and short videos of potentiometer-controlled and STM32-button-controlled actuator motion. Large raw phone media were intentionally kept outside Git. The repository includes sanitized report figures, source code, logs, calibration presets, the STM32 firmware tree, and this PDF report. This keeps the repository portable while preserving the evidence chain separately.
+The submitted evidence package should contain this report, the selected photographs used in the report, the original videos of actuator motion, ESCON Studio screenshots, the exported ESCON configuration, the STM32 project, the Myo calibration/log files, and a source-code archive or link. The main report includes representative figures; the full videos are kept as companion evidence so that the actuator motion can be reviewed directly.
 
 \chapter{Physical System}
 
 \section{Hardware architecture}
 
 The physical test bench comprised a PMA-8A-50-01-E500ML actuator, ESCON 50/5, incremental encoder, NUCLEO-F446RE, and an external DC supply. The ESCON handled encoder-based closed-loop velocity control. The STM32 supplied only the speed setpoint and enable signal.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{figures/stm32-escon-setup-overview.jpg}
+\caption{Physical command setup used for STM32-to-ESCON testing. The Nucleo board supplies only low-current command signals; motor power and velocity control remain handled by the ESCON.}
+\end{figure}
 
 \begin{table}[H]
 \centering
@@ -190,6 +196,12 @@ Maximum permissible speed & $6000\,\mathrm{rpm}$\\
 \end{table}
 
 Supervised automatic tuning completed successfully. Stable rotation was first observed using Potentiometer~1. The STM32 interface was then verified independently with a multimeter before connection to the ESCON. The measured active outputs were approximately $1.00\,\mathrm{V}$ on PA4 and $3.31\,\mathrm{V}$ on PC0; inactive output was approximately $0.00\,\mathrm{V}$.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{figures/stm32-voltage-debug-sequence.jpg}
+\caption{Voltage-isolation evidence from the STM32 debugging stage. The timed/blink test and button tests were used to confirm inactive and active command states before the ESCON inputs were connected.}
+\end{figure}
 
 \begin{figure}[H]
 \centering
@@ -373,7 +385,7 @@ The next engineering step is mechanical rather than algorithmic: fabricate the 1
 \appendix
 \chapter{Evidence Matrix}
 
-Raw phone media were kept outside the Git repository because the videos are large and may contain private laboratory context. The following table records what the evidence set is meant to support. The video descriptions should be checked against the original clips during final submission packaging.
+The following table records what each evidence category supports. Representative photographs are embedded in the report, while the original videos and screenshots should be submitted in the companion evidence folder.
 
 \begin{table}[H]
 \centering
@@ -395,9 +407,9 @@ Replay figure & Recorded detector state driving a bounded virtual SEA model & Si
 \end{tabular}
 \end{table}
 
-\section{Raw media inventory}
+\section{Companion media inventory}
 
-The local raw media transferred from the phone were:
+The companion evidence folder should include the following transferred media files:
 \begin{verbatim}
 videos:
   20260706_101404.mp4  20260706_101655.mp4
@@ -413,7 +425,7 @@ configuration:
   STM32_BUTTON_ANALOG_TEST_PMA8A_2026-07-06.edc
 \end{verbatim}
 
-The report includes only selected normalized figures. The raw media should be submitted separately if the mentor requests full video proof.
+The report includes selected figures for readability. The original clips remain useful because they show the time sequence of potentiometer-controlled motion, timed STM32 output testing, and button-controlled actuator start/stop operation.
 
 \chapter{Reproduction Commands}
 
