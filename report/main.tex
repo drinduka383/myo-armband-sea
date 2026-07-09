@@ -9,6 +9,7 @@
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.65em}
 \newcommand{\measured}{\textbf{Measured}}
+\newcommand{\observed}{\textbf{Observed}}
 \newcommand{\simulated}{\textbf{Simulated}}
 
 \begin{document}
@@ -57,10 +58,52 @@ and, after mechanism calibration, an interaction torque estimate. The intended i
 The final available hardware did not include the spring, Bowden/tendon transmission, displacement sensor, or printed finger mechanism. Consequently, this report distinguishes three evidence classes:
 \begin{itemize}
   \item \measured: voltages, ESCON monitor values, EMG, IMU, and serial responses;
-  \item \textbf{Observed}: physical actuator motion in photographs and videos;
+  \item \observed: physical actuator motion in photographs and videos;
   \item \simulated: finger angle, spring deflection, spring force, and virtual SEA dynamics.
 \end{itemize}
 No simulated signal is presented as a physical measurement.
+
+\section{Final system architecture}
+
+The final deliverable is best understood as two validated chains joined by a conservative software interface. The low-level actuator chain was validated physically. The Myo chain was validated diagnostically with the motor disabled. The missing spring/finger mechanism was represented only in simulation.
+
+\begin{center}
+\setlength{\fboxsep}{8pt}
+\fbox{\begin{minipage}{0.88\textwidth}
+\centering
+Myo armband EMG/IMU\\
+$\Downarrow$\\
+Fedora laptop: calibration, template matching, motion rejection, CSV logging\\
+$\Downarrow$\\
+USB serial command: \texttt{0}/\texttt{1}\\
+$\Downarrow$\\
+STM32 NUCLEO-F446RE: DAC setpoint on PA4 and enable on PC0\\
+$\Downarrow$\\
+Maxon ESCON 50/5 velocity controller\\
+$\Downarrow$\\
+Harmonic Drive PMA actuator\\
+$\Downarrow$\\
+future SEA spring/tendon/finger mechanism
+\end{minipage}}
+\end{center}
+
+\section{Validation ladder}
+
+The project was intentionally validated in small steps so that each risk was isolated before the next connection was made.
+
+\begin{center}
+\setlength{\fboxsep}{8pt}
+\fbox{\begin{minipage}{0.88\textwidth}
+\centering
+ESCON USB configuration\\
+$\rightarrow$ potentiometer-controlled actuator rotation\\
+$\rightarrow$ STM32 voltage-only test\\
+$\rightarrow$ STM32-to-ESCON button-controlled rotation\\
+$\rightarrow$ serial STOP/RUN/STATUS test\\
+$\rightarrow$ Myo diagnostic classification with motor disabled\\
+$\rightarrow$ virtual SEA replay from recorded detector states
+\end{minipage}}
+\end{center}
 
 \chapter{Laboratory Development Chronology}
 
@@ -76,6 +119,18 @@ The final result came from a staged commissioning process rather than a single e
   \item \textbf{6 July 2026 -- embedded MVP achieved.} A working CubeIDE project named \texttt{new-stm-code} was created. PA4/A2 and PC0/A5 were verified independently with a multimeter, then wired to ESCON Analog Input 1 and Digital Input 2. Pressing the Nucleo button produced about 1.00 V analog command and 3.31 V enable; ESCON demand and actual speed rose near 100 rpm; the PMA actuator rotated repeatably.
   \item \textbf{7--8 July 2026 -- Myo and serial diagnostics.} Laptop serial control, Myo armband acquisition, calibration, template matching, gesture rejection, gyro-based motion rejection, live plotting, CSV logging, and virtual SEA replay were added. Myo diagnostic control worked with the motor disabled.
   \item \textbf{9 July 2026 -- finalization.} The repository, report, evidence notes, replay plots, and software checks were finalized. The deliverable was frozen as a physical actuator/embedded-control MVP plus diagnostic Myo subsystem and simulated SEA replay.
+\end{itemize}
+
+\section{Failure and recovery points}
+
+Several useful engineering corrections occurred during the process:
+
+\begin{itemize}
+  \item The first STM32 project attempt did not produce a clean CubeIDE workflow. The recovery step was to regenerate the project as \texttt{new-stm-code}, verify that the expected CubeIDE project files existed, and rebuild before touching the ESCON wiring.
+  \item The initial button-control logic behaved opposite to the intended hold-to-run behaviour. This mattered because a wrong default state could command the motor while the button was not pressed. The firmware was therefore tested as a timed blink/interval output first, which separated software logic from human button timing.
+  \item The STM32 outputs were checked with a multimeter before they were connected to the ESCON. This confirmed the three important states: inactive analog output near $0$ V, active analog command near $1.00$ V, and digital enable near $3.31$ V.
+  \item Only after the voltage-only test passed was the STM32 connected to Analog Input 1 and Digital Input 2 on the ESCON. The corrected button firmware then produced the intended hold-to-run behaviour.
+  \item Myo control was kept motor-disabled because the physical SEA output stage did not yet include travel limits, spring deflection sensing, or a finger mechanism. This was a safety decision, not a software limitation.
 \end{itemize}
 
 \section{Evidence handling}
@@ -144,6 +199,50 @@ Supervised automatic tuning completed successfully. Stable rotation was first ob
 
 Pressing the Nucleo user button asserted enable and the $1$ V command; ESCON Studio showed demand and actual speeds near $100$ rpm, and the actuator rotated stably. Releasing the button returned the DAC to $0$ V, removed enable, and stopped the actuator. Repeated start/stop operation was recorded on video. This is the completed physical MVP.
 
+\section{Commissioning procedure}
+
+The physical commissioning procedure was deliberately ordered from lowest-risk to highest-risk:
+
+\begin{enumerate}
+  \item \textbf{Controller-only setup.} The ESCON was connected to the PC over USB and configured while the external DC motor supply was still absent. The visible undervoltage fault was expected at this stage and confirmed that the controller was detected but not yet powered for motion.
+  \item \textbf{Wiring inspection.} Power, motor, and encoder wiring were checked before energizing the system. The PMA actuator remained unloaded and the current and ramp settings were kept conservative.
+  \item \textbf{Automatic tuning.} The ESCON automatic tuning routine was run under supervision. The actuator made only small identification movements, then the controller accepted the tuned speed-loop parameters.
+  \item \textbf{Potentiometer motion test.} The command source was temporarily changed to Potentiometer 1. Digital Input 2 was enabled through a removable jumper, and the potentiometer range was limited to approximately 0--100 rpm. This proved the ESCON, encoder, power wiring, and actuator could produce stable low-speed motion without involving STM32 code.
+  \item \textbf{STM32 output isolation.} The Nucleo was tested separately from the ESCON. A timed output/blink test made PA4 and PC0 alternate between inactive and active states so the multimeter readings could be captured without needing to hold the user button.
+  \item \textbf{Hold-to-run firmware.} After the voltage levels were correct, the firmware was changed back to the intended user-button behaviour: released means STOP, pressed means RUN.
+  \item \textbf{STM32-to-ESCON test.} PA4/A2 was connected to Analog Input 1+, PC0/A5 to Digital Input 2, and the two grounds to the ESCON analog/digital references. Pressing the Nucleo button then produced stable actuator rotation and releasing it stopped the actuator.
+\end{enumerate}
+
+\begin{table}[H]
+\centering
+\caption{Hardware validation tests and what each test proved.}
+\begin{tabular}{p{0.25\textwidth}p{0.37\textwidth}p{0.28\textwidth}}
+\toprule
+Test & Method & Conclusion\\
+\midrule
+ESCON detection & USB connection to ESCON Studio & Controller communication was working\\
+Expected undervoltage & ESCON configured before external supply & Fault was understood, not unexplained\\
+Auto-tuning & Supervised ESCON tuning routine & Encoder and motor loop were usable\\
+Potentiometer rotation & Potentiometer 1 setpoint, DI2 jumper enable & Actuator/controller chain moved stably\\
+STM32 inactive output & Multimeter on PA4 and PC0 & STOP state produced approximately 0 V\\
+STM32 active output & Timed output and button tests & RUN state produced about 1.00 V and 3.31 V\\
+Button motor test & STM32 wired to ESCON AI1 and DI2 & Embedded control MVP was achieved\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Why the blink/interval test mattered}
+
+The timed output test was a practical debugging step. During early button testing, the button logic did not behave as intended: the active and inactive states were effectively reversed. Rather than connecting an uncertain signal to the motor controller, the STM32 was programmed to alternate the output state automatically. This made it possible to watch the LED and measure PA4/PC0 with the multimeter at known intervals. Once the inactive and active voltage levels were proven, the code was returned to hold-to-run button control and tested again.
+
+This step is important because it separated three possible faults:
+\begin{itemize}
+  \item a firmware logic error in the button state;
+  \item an incorrect STM32 pin assignment;
+  \item an unsafe or unexpected voltage level at the ESCON input.
+\end{itemize}
+Only the first issue remained, and it was corrected before connecting the STM32 to the ESCON.
+
 \chapter{sEMG Intent Detection}
 
 \section{Acquisition and features}
@@ -164,6 +263,50 @@ Calibration recorded rest in three forearm orientations, several candidate inten
 Live classification required activity above the orientation-specific rest threshold, adequate target similarity, a positive margin over the strongest rejection class, and low gyroscope magnitude. Hysteresis and hold times suppressed rapid switching. The detector states were REST, TARGET, GESTURE\_REJECT, and MOTION\_REJECT. TARGET generated serial command \texttt{1}; all other states generated \texttt{0}. A three-second STM32 command timeout and repeated STOP commands provided communication fail-safe behaviour.
 
 Calibration presets can be reused, numerically adjusted, or partially retaken. Every run logs timestamped raw EMG, MAV features, similarity scores, state, command, IMU magnitude, and virtual-model outputs to CSV.
+
+\section{Software implementation}
+
+The final software is split into two simple layers.
+
+\subsection{STM32 firmware}
+
+The STM32 firmware implements a small serial command interpreter on the ST-LINK virtual COM port. Its job is not to classify EMG or control position; it only translates a safe high-level command into the two ESCON inputs:
+
+\begin{table}[H]
+\centering
+\caption{STM32 serial command behaviour.}
+\begin{tabular}{lll}
+\toprule
+Command & STM32 output & Reply\\
+\midrule
+\texttt{0} or \texttt{STOP} & PA4 = 0 V, PC0 = low, LED off & \texttt{ACK STOP}\\
+\texttt{1} or \texttt{RUN} & PA4 $\approx$ 1 V, PC0 = high, LED on & \texttt{ACK RUN DAC=1241 ENABLE=1}\\
+\texttt{P 0..100} & Scaled fraction of the 1 V run command & \texttt{ACK P=...}\\
+\texttt{S} or \texttt{STATUS} & No output change & Reports DAC and enable state\\
+Invalid input & Forces STOP & Error message ending in STOP\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Boot, parse errors, UART errors, and commands longer than the line buffer all force STOP. A three-second command timeout also forces STOP if the output is active and no fresh command arrives. This keeps the microcontroller behaviour intentionally boring: the laptop may decide when to run, but the STM32 defaults to no analog command and no enable.
+
+\subsection{Laptop Myo bridge}
+
+The Python program performs the higher-level work:
+
+\begin{enumerate}
+  \item connect to the known Myo BLE address;
+  \item acquire eight-channel EMG and IMU/gyroscope samples;
+  \item collect or load a calibration preset;
+  \item compute 200 ms MAV windows with 50 ms step;
+  \item normalize the eight-channel spatial pattern;
+  \item compare the live pattern with the target and rejection templates;
+  \item reject high-gyro motion;
+  \item print live debug output and write CSV logs;
+  \item send \texttt{1} only for accepted TARGET and \texttt{0} for REST or rejection.
+\end{enumerate}
+
+The implementation deliberately kept the serial interface binary at the behaviour level: TARGET means RUN, every other state means STOP. More proportional control can be added later, but the present actuator does not yet have a completed finger mechanism or output-position feedback, so a richer command would not be physically meaningful yet.
 
 \section{Diagnostic Myo validation}
 
@@ -228,6 +371,50 @@ The project established a reproducible actuator-control baseline and extended it
 The next engineering step is mechanical rather than algorithmic: fabricate the 1-DOF finger and tendon path, select and calibrate the spring-deflection sensor, add output travel sensing or hard limits, and only then implement and tune the physical impedance loop. EMD measurement should follow validation of synchronized EMG and measured spring-force onset.
 
 \appendix
+\chapter{Evidence Matrix}
+
+Raw phone media were kept outside the Git repository because the videos are large and may contain private laboratory context. The following table records what the evidence set is meant to support. The video descriptions should be checked against the original clips during final submission packaging.
+
+\begin{table}[H]
+\centering
+\caption{Evidence items and interpretation.}
+\begin{tabular}{p{0.24\textwidth}p{0.34\textwidth}p{0.32\textwidth}}
+\toprule
+Evidence & Supports & Interpretation boundary\\
+\midrule
+ESCON Studio screenshots and exported \texttt{.edc} file & ESCON 50/5 configuration, encoder mode, Analog Input 1 speed setpoint, Digital Input 2 enable, current/ramp limits & Proves controller configuration, not external mechanism performance\\
+Potentiometer-controlled actuator video & ESCON, encoder, supply, and PMA actuator could produce stable low-speed rotation before STM32 integration & Observed actuator motion only; no finger mechanism attached\\
+Timed STM32 output videos/photos & PA4 and PC0 could be driven in known active/inactive intervals & Debug evidence for voltage-state isolation\\
+Multimeter photographs & PA4 inactive near 0 V, active near 1.00 V, PC0 active near 3.31 V & Electrical command validation before ESCON connection\\
+STM32-to-ESCON wiring photograph & Physical mapping between Nucleo pins and ESCON AI1/DI2 terminals & Documents the command interface wiring\\
+Button-controlled actuator video & Pressing the Nucleo button commanded ESCON motion; releasing stopped it & Completed physical embedded-control MVP\\
+Serial transcript & \texttt{STOP}, \texttt{RUN}, and \texttt{STATUS} commands returned ACKs and changed STM32 state & Bench validation of laptop-to-STM32 protocol\\
+Myo calibration presets and CSV logs & EMG/IMU acquisition, gesture classification, rejection states, and replay data & Diagnostic Myo subsystem only; motor disabled during these runs\\
+Replay figure & Recorded detector state driving a bounded virtual SEA model & Simulated spring/finger response, not measured force or angle\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Raw media inventory}
+
+The local raw media transferred from the phone were:
+\begin{verbatim}
+videos:
+  20260706_101404.mp4  20260706_101655.mp4
+  20260706_140056.mp4  20260706_143019.mp4
+  20260706_143025.mp4  20260706_143045.mp4
+
+photographs:
+  20260706_113957.jpg  20260706_114028.jpg  20260706_114030.jpg
+  20260706_121857.jpg  20260706_121859.jpg  20260706_121931.jpg
+  20260706_121933.jpg  20260706_142438.jpg  20260706_142951.jpg
+
+configuration:
+  STM32_BUTTON_ANALOG_TEST_PMA8A_2026-07-06.edc
+\end{verbatim}
+
+The report includes only selected normalized figures. The raw media should be submitted separately if the mentor requests full video proof.
+
 \chapter{Reproduction Commands}
 
 Run the Myo system without a motor command:
