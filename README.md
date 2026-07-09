@@ -146,7 +146,7 @@ control.
 - ESCON configuration screenshot and unloaded actuator video
 - Myo REST/ACTIVE/REST terminal screenshot with motor disabled
 - Diagnostic and assistive virtual-model screenshots
-- Final Myo-to-motor video (not completed; do not imply otherwise)
+- Final Myo-to-motor video (not completed)
 - CSV session logs and generated PNG plots
 
 Known limitation: the physical SEA/tendon/finger mechanism is not complete, so
