@@ -24,7 +24,7 @@
 \begin{tabular}{ll}
 Institutional mentor: & Prof. dr. Ale\v{s} Hace\\
 Prepared by: & Drin Duka\\
-Date: & 8 July 2026
+Date: & 9 July 2026
 \end{tabular}
 \vfill
 {Maribor, 2026\par}
@@ -61,6 +61,26 @@ The final available hardware did not include the spring, Bowden/tendon transmiss
   \item \simulated: finger angle, spring deflection, spring force, and virtual SEA dynamics.
 \end{itemize}
 No simulated signal is presented as a physical measurement.
+
+\chapter{Laboratory Development Chronology}
+
+The final result came from a staged commissioning process rather than a single end-to-end build. This chronology is included because it shows which parts of the original SEA project were physically validated, which parts were deferred, and why the final demonstration scope was reduced.
+
+\begin{itemize}
+  \item \textbf{17 June 2026 -- hardware familiarisation.} The available PMA actuators, ESCON 50/5 controller, encoder wiring, STM32 board, bench supply, and mechanical stock were inspected. An existing ESCON configuration was opened in ESCON Studio and preserved as a reference. The result was a safe commissioning sequence: identify hardware, prepare cables, verify wiring, power up under supervision, tune, then integrate STM32. No powered motor test was performed.
+  \item \textbf{22 June 2026 -- cable preparation.} J1 power leads and J2 motor leads were prepared with suitable terminations, insulation, and planned continuity checks. The system remained unpowered.
+  \item \textbf{1 July 2026 -- STM32 and ESCON setup.} The STM32 toolchain was verified with a NUCLEO-F446RE blink/button project. A fresh ESCON 50/5 was configured for the PMA-8A actuator with conservative current and speed limits, encoder feedback, closed-loop speed control, Analog Input 1 setpoint, and Digital Input 2 enable. The expected VCC undervoltage fault remained because external motor power was not yet connected.
+  \item \textbf{2 July 2026 -- supervised power-up.} External power was applied under supervision, the undervoltage fault cleared, automatic tuning completed, and Potentiometer 1 was temporarily used as a low-speed setpoint. First controlled actuator motion was achieved near 100 rpm.
+  \item \textbf{3 July 2026 -- STM32 integration planning.} The STM32 interface was planned as PA4/A2 for DAC speed setpoint, PC0/A5 for digital enable, PC13 for the user button, and PA5 for LED feedback. The initial generated project workflow caused toolchain confusion, so no STM32-to-ESCON motor test was completed that day.
+  \item \textbf{4--5 July 2026 -- scope recovery.} The plan was reduced to a minimum viable actuator chain: preserve the potentiometer demo, verify STM32 outputs with a multimeter, connect to ESCON only after verification, and keep a fallback demonstration.
+  \item \textbf{6 July 2026 -- embedded MVP achieved.} A working CubeIDE project named \texttt{new-stm-code} was created. PA4/A2 and PC0/A5 were verified independently with a multimeter, then wired to ESCON Analog Input 1 and Digital Input 2. Pressing the Nucleo button produced about 1.00 V analog command and 3.31 V enable; ESCON demand and actual speed rose near 100 rpm; the PMA actuator rotated repeatably.
+  \item \textbf{7--8 July 2026 -- Myo and serial diagnostics.} Laptop serial control, Myo armband acquisition, calibration, template matching, gesture rejection, gyro-based motion rejection, live plotting, CSV logging, and virtual SEA replay were added. Myo diagnostic control worked with the motor disabled.
+  \item \textbf{9 July 2026 -- finalization.} The repository, report, evidence notes, replay plots, and software checks were finalized. The deliverable was frozen as a physical actuator/embedded-control MVP plus diagnostic Myo subsystem and simulated SEA replay.
+\end{itemize}
+
+\section{Evidence handling}
+
+The evidence set contains wiring photographs, multimeter photographs, ESCON Studio screenshots, and short videos of potentiometer-controlled and STM32-button-controlled actuator motion. Large raw phone media were intentionally kept outside Git. The repository includes sanitized report figures, source code, logs, calibration presets, the STM32 firmware tree, and this PDF report. This keeps the repository portable while preserving the evidence chain separately.
 
 \chapter{Physical System}
 
@@ -144,6 +164,12 @@ Calibration recorded rest in three forearm orientations, several candidate inten
 Live classification required activity above the orientation-specific rest threshold, adequate target similarity, a positive margin over the strongest rejection class, and low gyroscope magnitude. Hysteresis and hold times suppressed rapid switching. The detector states were REST, TARGET, GESTURE\_REJECT, and MOTION\_REJECT. TARGET generated serial command \texttt{1}; all other states generated \texttt{0}. A three-second STM32 command timeout and repeated STOP commands provided communication fail-safe behaviour.
 
 Calibration presets can be reused, numerically adjusted, or partially retaken. Every run logs timestamped raw EMG, MAV features, similarity scores, state, command, IMU magnitude, and virtual-model outputs to CSV.
+
+\section{Diagnostic Myo validation}
+
+The final diagnostic session on 8 July 2026 ran for about 167 s with the motor command disabled. The log contained rest periods, repeated pinch attempts, open-hand rejection, full-fist rejection, wrist flexion/extension, and forearm rotation. Of 1611 logged windows, 384 were classified as REST, 91 as TARGET, 567 as GESTURE\_REJECT, and 569 as MOTION\_REJECT. This is not presented as a robust clinical classifier; it is evidence that the software can accept the calibrated pinch intent while suppressing many competing gestures and high-motion intervals.
+
+The strongest limitation observed in the log was that pinch attempts can be interrupted by wrist/forearm motion rejection, and open-hand or full-fist templates can sometimes remain close to the target template. Therefore, the correct interpretation is ``diagnostic intent interface proven,'' not ``finished proportional hand controller.'' Motor-enabled Myo testing was deliberately postponed until the mechanism and safety limits are better defined.
 
 \chapter{Virtual SEA Replay}
 
