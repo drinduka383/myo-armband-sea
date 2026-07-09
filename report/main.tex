@@ -143,12 +143,6 @@ The submitted evidence package should contain this report, the selected photogra
 
 The physical test bench comprised a PMA-8A-50-01-E500ML actuator, ESCON 50/5, incremental encoder, NUCLEO-F446RE, and an external DC supply. The ESCON handled encoder-based closed-loop velocity control. The STM32 supplied only the speed setpoint and enable signal.
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.92\textwidth]{figures/stm32-escon-setup-overview.jpg}
-\caption{Physical command setup used for STM32-to-ESCON testing. The Nucleo board supplies only low-current command signals; motor power and velocity control remain handled by the ESCON.}
-\end{figure}
-
 \begin{table}[H]
 \centering
 \caption{Verified STM32-to-ESCON interface.}
@@ -166,8 +160,8 @@ GND & J5 pin 5, Signal GND & Digital reference\\
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.92\textwidth]{figures/stm32-escon-wiring.jpg}
-\caption{Observed STM32-to-ESCON signal wiring. The photograph documents the physical command interface, not a completed finger mechanism.}
+\includegraphics[width=0.92\textwidth]{figures/stm32-escon-wiring-annotated.jpg}
+\caption{Annotated STM32-to-ESCON signal wiring. Blue connects PA4/A2 to ESCON J6 pin 1 for Analog Input 1; yellow connects PC0/A5 to ESCON J5 pin 2 for Digital Input 2 enable; black wires provide the required signal/analog grounds.}
 \end{figure}
 
 \section{ESCON configuration and commissioning}
@@ -199,14 +193,8 @@ Supervised automatic tuning completed successfully. Stable rotation was first ob
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.92\textwidth]{figures/stm32-voltage-debug-sequence.jpg}
-\caption{Voltage-isolation evidence from the STM32 debugging stage. The timed/blink test and button tests were used to confirm inactive and active command states before the ESCON inputs were connected.}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=\textwidth]{figures/stm32-output-measurements.jpg}
-\caption{Measured STM32 command voltages before connection to the motor controller: inactive DAC (left), active DAC (centre), and active digital enable (right).}
+\includegraphics[width=\textwidth]{figures/stm32-voltage-vertical-proof.jpg}
+\caption{Voltage-isolation evidence from the STM32 debugging stage. The images show the inactive state near $0$ V, the analog RUN command at $1.00$ V, and the digital enable level at $3.31$ V.}
 \end{figure}
 
 Pressing the Nucleo user button asserted enable and the $1$ V command; ESCON Studio showed demand and actual speeds near $100$ rpm, and the actuator rotated stably. Releasing the button returned the DAC to $0$ V, removed enable, and stopped the actuator. Repeated start/stop operation was recorded on video. This is the completed physical MVP.
@@ -219,7 +207,7 @@ The physical commissioning procedure was deliberately ordered from lowest-risk t
   \item \textbf{Controller-only setup.} The ESCON was connected to the PC over USB and configured while the external DC motor supply was still absent. The visible undervoltage fault was expected at this stage and confirmed that the controller was detected but not yet powered for motion.
   \item \textbf{Wiring inspection.} Power, motor, and encoder wiring were checked before energizing the system. The PMA actuator remained unloaded and the current and ramp settings were kept conservative.
   \item \textbf{Automatic tuning.} The ESCON automatic tuning routine was run under supervision. The actuator made only small identification movements, then the controller accepted the tuned speed-loop parameters.
-  \item \textbf{Potentiometer motion test.} The command source was temporarily changed to Potentiometer 1. Digital Input 2 was enabled through a removable jumper, and the potentiometer range was limited to approximately 0--100 rpm. This proved the ESCON, encoder, power wiring, and actuator could produce stable low-speed motion without involving STM32 code.
+  \item \textbf{Potentiometer motion test.} The command source was temporarily changed to Potentiometer 1. Digital Input 2 was enabled from the ESCON auxiliary connection through a removable jumper, and the potentiometer range was limited to approximately 0--100 rpm. This proved the ESCON, encoder, power wiring, and actuator could produce stable low-speed motion without involving STM32 code.
   \item \textbf{STM32 output isolation.} The Nucleo was tested separately from the ESCON. A timed output/blink test made PA4 and PC0 alternate between inactive and active states so the multimeter readings could be captured without needing to hold the user button.
   \item \textbf{Hold-to-run firmware.} After the voltage levels were correct, the firmware was changed back to the intended user-button behaviour: released means STOP, pressed means RUN.
   \item \textbf{STM32-to-ESCON test.} PA4/A2 was connected to Analog Input 1+, PC0/A5 to Digital Input 2, and the two grounds to the ESCON analog/digital references. Pressing the Nucleo button then produced stable actuator rotation and releasing it stopped the actuator.
@@ -259,7 +247,7 @@ Only the first issue remained, and it was corrected before connecting the STM32 
 
 \section{Acquisition and features}
 
-The deprecated Myo armband was connected to a laptop over BLE. The laptop subscribed to eight EMG channels and IMU data. No Bluetooth discovery was required during normal use because the known device address was supplied directly. For each $200$ ms sliding window with a $50$ ms step, the mean absolute value (MAV) was calculated:
+The deprecated Myo armband was connected to a laptop over BLE. The laptop subscribed to eight EMG channels and IMU data. The BLE address used in the command line identifies this specific armband during this setup; it is not a general address for all Myo devices. If the armband is sleeping, already connected to another computer/phone, or not advertising, the software can fail to connect even when the saved address is correct. For normal runs the known address was supplied directly, avoiding repeated broad Bluetooth scanning. For each $200$ ms sliding window with a $50$ ms step, the mean absolute value (MAV) was calculated:
 \begin{equation}
 f_i=\frac{1}{N}\sum_{n=1}^{N}|e_i[n]|,\qquad i=1,\ldots,8.
 \end{equation}
@@ -395,7 +383,7 @@ The following table records what each evidence category supports. Representative
 Evidence & Supports & Interpretation boundary\\
 \midrule
 ESCON Studio screenshots and exported \texttt{.edc} file & ESCON 50/5 configuration, encoder mode, Analog Input 1 speed setpoint, Digital Input 2 enable, current/ramp limits & Proves controller configuration, not external mechanism performance\\
-Potentiometer-controlled actuator video & ESCON, encoder, supply, and PMA actuator could produce stable low-speed rotation before STM32 integration & Observed actuator motion only; no finger mechanism attached\\
+Potentiometer-controlled actuator video & ESCON auxiliary/jumper enable, encoder, supply, and PMA actuator could produce stable low-speed rotation before STM32 integration & Observed actuator motion only; no finger mechanism attached\\
 Timed STM32 output videos/photos & PA4 and PC0 could be driven in known active/inactive intervals & Debug evidence for voltage-state isolation\\
 Multimeter photographs & PA4 inactive near 0 V, active near 1.00 V, PC0 active near 3.31 V & Electrical command validation before ESCON connection\\
 STM32-to-ESCON wiring photograph & Physical mapping between Nucleo pins and ESCON AI1/DI2 terminals & Documents the command interface wiring\\
